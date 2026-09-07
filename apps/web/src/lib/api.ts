@@ -2,7 +2,7 @@ import type { BlogPost, BirthProfile, Celebrity, Consultation, DashboardData, Ex
 const API_URL=(import.meta.env.VITE_API_URL as string|undefined)||'/api';
 async function request<T>(path:string,init?:RequestInit):Promise<T>{
   const response=await fetch(`${API_URL}${path}`,{...init,headers:{'Content-Type':'application/json',...(init?.headers||{})}});
-  if(!response.ok){let message=`API ${response.status}`;try{const body=await response.json() as {message?:string};if(body.message)message=body.message;}catch{}throw new Error(message);}
+  if(!response.ok){let message=`API ${response.status}`;try{const body=await response.json() as {message?:string};if(body.message)message=body.message;}catch{message=`API ${response.status}: ${response.statusText||'Request failed'}`;}throw new Error(message);}
   return response.json() as Promise<T>;
 }
 const json=(body:unknown)=>JSON.stringify(body);
