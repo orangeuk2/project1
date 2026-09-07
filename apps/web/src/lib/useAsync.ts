@@ -1,0 +1,3 @@
+import { useCallback,useEffect,useState } from 'react';
+export function useAsync<T>(factory:()=>Promise<T>,deps:readonly unknown[]=[]){const[data,setData]=useState<T|null>(null);const[loading,setLoading]=useState(true);const[error,setError]=useState<string|null>(null);const run=useCallback(async()=>{setLoading(true);setError(null);try{const result=await factory();setData(result);return result;}catch(err){setError(err instanceof Error?err.message:'Something went wrong');throw err;}finally{setLoading(false);}},deps);// eslint-disable-line react-hooks/exhaustive-deps
+useEffect(()=>{void run();},[run]);return{data,loading,error,run,setData};}

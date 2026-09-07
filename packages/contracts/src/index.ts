@@ -1,0 +1,13 @@
+export type Specialty = 'Vedic' | 'Nadi' | 'KP' | 'Tarot' | 'Numerology' | 'Vastu';
+export type Expert = { id:string; name:string; role:string; specialty:Specialty; signature:string; years:number; languages:string[]; rating:number; reviews:number; rate:number; online:boolean; avatar:string; tags:string[] };
+export type ToolSummary = { id:string; title:string; eyebrow:string; description:string; category:'Core chart'|'Timing'|'Relationships'|'Purpose'|'Research'; path:string; premium?:boolean };
+export type BirthProfile = { name:string; date:string; time:string; place:string; timezone:string };
+export type Panchang = { location:string; dateLabel:string; tithi:string; nakshatra:string; yoga:string; rahuKaal:string; moonSign:string; sunrise:string; sunset:string; note:string };
+export type ChatMessage = { id:string; role:'user'|'assistant'; content:string; createdAt:string };
+export type KundliResult = { ascendant:string; moonSign:string; nakshatra:string; activeDasha:string; strengths:string[]; planets:Array<{planet:string;sign:string;house:number;dignity:string}> };
+export type CompatibilityResult = { score:number; maxScore:number; label:string; dimensions:Array<{label:string;score:number;max:number}>; summary:string };
+export type NumerologyResult = { lifePath:number; expression:number; soulUrge:number; personalYear:number; summary:string };
+export type PastLifeResult = { archetype:string; d60Tone:string; themes:string[]; chapters:Array<{title:string;body:string}> };
+export type AstroGpsResult = { goal:string; cities:Array<{city:string;country:string;score:number;reason:string;planet:string}> };
+export type Celebrity = { id:string; name:string; field:string; rating:'AA'|'A'|'B'; milestone:string; dasha:string; pattern:string };
+export type Report = { id:string; title:string; description:string; price:number; pages:string; badge:string };
