@@ -1,20 +1,134 @@
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import type { AstroGpsResult, BirthProfile, CompatibilityResult, KundliResult, NumerologyResult, PastLifeResult } from '@vedanova/contracts';
-import { celebrities, experts, panchang, profile, reports, tools } from './data.js';
-const app=new Hono(); const port=Number(process.env.API_PORT||8787); const origin=process.env.WEB_ORIGIN||'http://localhost:5173';
-app.use('/api/*',cors({origin})); app.use('/api/*',async(c,next)=>{const started=Date.now();await new Promise(r=>setTimeout(r,180));await next();c.header('X-Demo-Latency',String(Date.now()-started));});
-app.get('/api/health',c=>c.json({status:'ok',service:'vedanova-demo-api'}));
-app.get('/api/home',c=>c.json({experts:experts.slice(0,4),tools:tools.slice(0,6),panchang,reports:reports.slice(0,2)}));
-app.get('/api/experts',c=>{const specialty=c.req.query('specialty');const online=c.req.query('online');return c.json(experts.filter(e=>(!specialty||specialty==='All'||e.specialty===specialty)&&(!online||String(e.online)===online)));});
-app.get('/api/experts/:id',c=>{const e=experts.find(x=>x.id===c.req.param('id'));return e?c.json(e):c.json({message:'Expert not found'},404);});
-app.post('/api/chat/sessions',async c=>{const body=await c.req.json<{expertId:string}>();const expert=experts.find(x=>x.id===body.expertId)||experts[0];return c.json({sessionId:`demo-${expert.id}`,expert,freeMinutes:3});});
-app.post('/api/chat/sessions/:id/messages',async c=>{const body=await c.req.json<{message:string;expertId?:string}>();const topic=body.message.toLowerCase();const focus=topic.includes('career')?'career and the 10th-house themes':topic.includes('love')||topic.includes('marriage')?'relationships and D9 themes':topic.includes('money')?'resources, gains and timing':'your current priorities and timing';return c.json({id:`reply-${Date.now()}`,role:'assistant',createdAt:new Date().toISOString(),content:`For this demo reading I would begin with ${focus}. Your sample profile is running a Jupiter-led period, so the useful question is where growth needs structure rather than speed. In production, this reply will be generated from calculated chart data and the selected advisor's method.`});});
-app.get('/api/tools',c=>c.json(tools)); app.get('/api/profile',c=>c.json(profile)); app.get('/api/panchang',c=>c.json(panchang)); app.get('/api/celebrities',c=>c.json(celebrities)); app.get('/api/reports',c=>c.json(reports));
-app.post('/api/tools/kundli',async c=>{await c.req.json<BirthProfile>();const result:KundliResult={ascendant:'Scorpio',moonSign:'Capricorn',nakshatra:'Shravana',activeDasha:'Jupiter · Mercury',strengths:['Strategic persistence','Research orientation','Communication improves with preparation'],planets:[{planet:'Sun',sign:'Scorpio',house:1,dignity:'Focused'},{planet:'Moon',sign:'Capricorn',house:3,dignity:'Practical'},{planet:'Mars',sign:'Leo',house:10,dignity:'Strong'},{planet:'Mercury',sign:'Scorpio',house:1,dignity:'Analytical'},{planet:'Jupiter',sign:'Libra',house:12,dignity:'Reflective'},{planet:'Venus',sign:'Sagittarius',house:2,dignity:'Expressive'},{planet:'Saturn',sign:'Aquarius',house:4,dignity:'Own sign'},{planet:'Rahu',sign:'Scorpio',house:1,dignity:'Intense'},{planet:'Ketu',sign:'Taurus',house:7,dignity:'Detached'}]};return c.json(result);});
-app.post('/api/tools/compatibility',async c=>{await c.req.json<{personA:BirthProfile;personB:BirthProfile}>();const result:CompatibilityResult={score:28,maxScore:36,label:'Strong foundation',dimensions:[{label:'Temperament',score:5,max:6},{label:'Emotional rhythm',score:4,max:5},{label:'Values',score:6,max:7},{label:'Attraction',score:5,max:6},{label:'Long-term support',score:8,max:12}],summary:'The demo score suggests supportive long-term potential, with the main work around emotional pacing and expectations.'};return c.json(result);});
-app.post('/api/tools/numerology',async c=>{await c.req.json<{name:string;date:string}>();const result:NumerologyResult={lifePath:6,expression:8,soulUrge:3,personalYear:5,summary:'Service and responsibility are the base note; this year emphasizes movement, experimentation and cleaner boundaries.'};return c.json(result);});
-app.post('/api/tools/past-life',async c=>{await c.req.json<BirthProfile>();const result:PastLifeResult={archetype:'The Archivist',d60Tone:'Kubera · Mercury emphasis',themes:['Stewardship','Knowledge','Unfinished promises'],chapters:[{title:'The role you carried',body:'A symbolic demo narrative points to a keeper of records, resources or agreements rather than a public ruler.'},{title:'What returns now',body:'The repeating theme is learning to share expertise without carrying responsibility for everyone around you.'},{title:'Integration',body:'Use the story as a reflective prompt only. Real D60 work requires very accurate birth time and deterministic astronomical calculation.'}]};return c.json(result);});
-app.post('/api/tools/astro-gps',async c=>{const body=await c.req.json<BirthProfile&{goal:string}>();const result:AstroGpsResult={goal:body.goal||'Money',cities:[{city:'Singapore',country:'Singapore',score:92,reason:'Fast network effects and disciplined growth themes.',planet:'Mercury'},{city:'Dubai',country:'UAE',score:88,reason:'Visibility, commerce and ambitious scaling are emphasized.',planet:'Sun'},{city:'Lisbon',country:'Portugal',score:84,reason:'Creative quality of life with room for partnerships.',planet:'Venus'},{city:'Bengaluru',country:'India',score:81,reason:'Learning, technology and peer-network momentum.',planet:'Jupiter'}]};return c.json(result);});
-app.notFound(c=>c.json({message:'Route not found'},404)); app.onError((error,c)=>{console.error(error);return c.json({message:'Demo API error'},500);}); serve({fetch:app.fetch,port},info=>console.log(`VedaNova API listening on http://localhost:${info.port}`));
+import type { BirthProfile, Order } from '@vedanova/contracts';
+import { blogPosts, celebrities, consultations, experts, panchang, products, reports, tools, wallet } from './data.js';
+import { makeToolResult } from './results.js';
+
+const app = new Hono();
+const port = Number(process.env.API_PORT || 8787);
+const origin = process.env.WEB_ORIGIN || 'http://localhost:5173';
+const profile:BirthProfile = {name:'Demo Seeker',date:'1993-11-18',time:'07:42',place:'Mumbai, India',timezone:'Asia/Kolkata'};
+
+app.use('/api/*', cors({origin}));
+app.use('/api/*', async (c,next) => {
+  const started=Date.now();
+  await new Promise(r=>setTimeout(r,120));
+  await next();
+  c.header('X-Demo-Latency', String(Date.now()-started));
+});
+
+app.get('/api/health', c=>c.json({status:'ok',service:'vedanova-demo-api',mode:'static-demo'}));
+app.get('/api/home', c=>c.json({experts:experts.slice(0,4),tools:tools.slice(0,8),panchang,reports:reports.slice(0,2),testimonials:[
+  {name:'Priya S.',city:'Bengaluru',quote:'The consultation flow felt calm and specific instead of overwhelming.',readBy:'Anaya Rao'},
+  {name:'Arjun M.',city:'Mumbai',quote:'I liked seeing the reasoning separated from the recommendation.',readBy:'Dev Mehta'},
+  {name:'Divya R.',city:'Hyderabad',quote:'The tool library makes it easy to compare different lenses from one birth profile.',readBy:'Arjun Bhat'}
+]}));
+
+app.get('/api/experts', c=>{
+  const specialty=c.req.query('specialty');
+  const language=c.req.query('language');
+  const online=c.req.query('online');
+  const q=(c.req.query('q')||'').toLowerCase();
+  return c.json(experts.filter(e=>(!specialty||specialty==='All'||e.specialty===specialty)&&(!language||language==='All'||e.languages.includes(language))&&(!online||String(e.online)===online)&&(!q||`${e.name} ${e.signature} ${e.tags.join(' ')}`.toLowerCase().includes(q))));
+});
+app.get('/api/experts/:id', c=>{
+  const e=experts.find(x=>x.id===c.req.param('id'));
+  return e?c.json(e):c.json({message:'Expert not found'},404);
+});
+
+app.post('/api/chat/sessions', async c=>{
+  const body=await c.req.json<{expertId:string}>();
+  const expert=experts.find(x=>x.id===body.expertId)||experts[0];
+  return c.json({sessionId:`demo-${expert.id}-${Date.now()}`,expert,freeMinutes:3,walletBalance:wallet.balance,suggestedPrompts:['What is the main theme of my current dasha?','What should I focus on in career this year?','What relationship pattern should I understand?']});
+});
+app.post('/api/chat/sessions/:id/messages', async c=>{
+  const body=await c.req.json<{message:string;expertId?:string}>();
+  const topic=body.message.toLowerCase();
+  const focus=topic.includes('career')?'career, the 10th-house lens and timing':topic.includes('love')||topic.includes('relationship')||topic.includes('marriage')?'relationship patterns and the D9 lens':topic.includes('money')||topic.includes('wealth')?'resources, gains and decision timing':'your current priorities and the active timing cycle';
+  return c.json({id:`reply-${Date.now()}`,role:'assistant',createdAt:new Date().toISOString(),content:`For this demo reading I would begin with ${focus}. The static sample profile is in a Jupiter–Mercury chapter, so I would separate what is expanding from what needs a clearer system. In production this response will be generated from calculated chart data plus the selected advisor method.`});
+});
+
+app.get('/api/tools', c=>c.json(tools));
+app.get('/api/tools/:id', c=>{
+  const item=tools.find(x=>x.id===c.req.param('id'));
+  return item?c.json(item):c.json({message:'Tool not found'},404);
+});
+app.post('/api/tools/:id/run', async c=>{
+  const id=c.req.param('id');
+  if(!tools.some(t=>t.id===id)) return c.json({message:'Tool not found'},404);
+  const body=await c.req.json<Record<string,unknown>>().catch(()=>({}));
+  return c.json(makeToolResult(id,body));
+});
+
+app.get('/api/profile', c=>c.json(profile));
+app.patch('/api/profile', async c=>{
+  const body=await c.req.json<BirthProfile>();
+  return c.json({...profile,...body,saved:true});
+});
+app.get('/api/panchang', c=>c.json(panchang));
+
+app.get('/api/celebrities', c=>{
+  const q=(c.req.query('q')||'').toLowerCase();
+  const category=c.req.query('category');
+  return c.json(celebrities.filter(x=>(!category||category==='All'||x.category===category)&&(!q||`${x.name} ${x.field} ${x.tags.join(' ')}`.toLowerCase().includes(q))));
+});
+app.get('/api/celebrities/:id', c=>{
+  const item=celebrities.find(x=>x.id===c.req.param('id'));
+  return item?c.json(item):c.json({message:'Celebrity not found'},404);
+});
+
+app.get('/api/reports', c=>c.json(reports));
+app.get('/api/reports/:id', c=>{
+  const item=reports.find(x=>x.id===c.req.param('id'));
+  return item?c.json(item):c.json({message:'Report not found'},404);
+});
+app.post('/api/reports/:id/purchase', c=>{
+  const item=reports.find(x=>x.id===c.req.param('id'));
+  if(!item) return c.json({message:'Report not found'},404);
+  const order:Order={id:`ord-${Date.now()}`,itemType:'report',itemId:item.id,title:item.title,amount:item.price,status:'demo',createdAt:new Date().toISOString()};
+  return c.json({order,message:'Demo purchase complete. No payment was processed.'});
+});
+
+app.get('/api/store', c=>c.json(products));
+app.get('/api/store/:id', c=>{
+  const item=products.find(x=>x.id===c.req.param('id'));
+  return item?c.json(item):c.json({message:'Product not found'},404);
+});
+app.post('/api/store/:id/purchase', c=>{
+  const item=products.find(x=>x.id===c.req.param('id'));
+  if(!item) return c.json({message:'Product not found'},404);
+  const order:Order={id:`ord-${Date.now()}`,itemType:'product',itemId:item.id,title:item.title,amount:item.price,status:'demo',createdAt:new Date().toISOString()};
+  return c.json({order,message:'Demo checkout complete. No charge or shipment was created.'});
+});
+
+app.get('/api/blog', c=>c.json(blogPosts));
+app.get('/api/blog/:slug', c=>{
+  const item=blogPosts.find(x=>x.slug===c.req.param('slug'));
+  return item?c.json(item):c.json({message:'Post not found'},404);
+});
+
+app.get('/api/wallet', c=>c.json(wallet));
+app.post('/api/wallet/top-up', async c=>{
+  const body=await c.req.json<{amount:number}>();
+  const amount=Math.max(100,Math.min(Number(body.amount)||500,10000));
+  return c.json({...wallet,balance:wallet.balance+amount,transactions:[{id:`top-${Date.now()}`,label:'Demo wallet top-up',amount,date:'Now',kind:'credit' as const},...wallet.transactions]});
+});
+app.get('/api/consultations', c=>c.json(consultations));
+app.get('/api/dashboard', c=>c.json({profile,wallet,consultations:consultations.slice(0,3),reports,recentTools:[{toolId:'kundli',title:'Birth Chart · D1',when:'Today'},{toolId:'dasha',title:'Vimshottari Dasha',when:'Yesterday'},{toolId:'astro-gps',title:'Astro GPS',when:'3 days ago'}],savedInsights:[{title:'Current focus',body:'Turn learning into systems.'},{title:'Relationship note',body:'Name expectations earlier.'}]}));
+
+app.get('/api/portal/stats', c=>c.json({status:'demo',todayEarnings:1240,monthEarnings:28450,activeChats:2,rating:4.93,responseTime:'42 sec',upcoming:[{time:'16:30',client:'Demo Client A',topic:'Career'},{time:'18:00',client:'Demo Client B',topic:'Compatibility'}]}));
+app.post('/api/portal/apply', async c=>{
+  const body=await c.req.json<Record<string,unknown>>();
+  return c.json({applicationId:`app-${Date.now()}`,status:'demo',received:true,preview:body});
+});
+
+app.post('/api/services/:id/book', async c=>{
+  const id=c.req.param('id');
+  const body=await c.req.json<Record<string,unknown>>().catch(()=>({}));
+  return c.json({bookingId:`book-${Date.now()}`,serviceId:id,status:'demo',request:body,message:'Demo booking created. No calendar event or payment was created.'});
+});
+
+app.notFound(c=>c.json({message:'Route not found'},404));
+app.onError((error,c)=>{console.error(error);return c.json({message:'Demo API error'},500);});
+serve({fetch:app.fetch,port},info=>console.log(`VedaNova API listening on http://localhost:${info.port}`));

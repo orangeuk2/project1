@@ -1,0 +1,20 @@
+import fs from 'node:fs';
+const read=p=>fs.readFileSync(new URL(`../${p}`,import.meta.url),'utf8');
+const data=read('apps/api/src/data.ts');
+const app=read('apps/web/src/App.tsx');
+const server=read('apps/api/src/server.ts');
+const api=read('apps/web/src/lib/api.ts');
+const ids=[...data.matchAll(/tool\('([^']+)'/g)].map(m=>m[1]);
+const unique=new Set(ids);
+const required=['kundli','dasha','compatibility','nakshatra','numerology','astro-gps','forecast-20','varshaphal','d27','bhrigu-bindu','kp-console','past-life','navamsa','d11','d2','doshas','yogas','divisional','muhurat','marriage-muhurat','ishta-devata','ashtakavarga','rashi-tulya','kalachakra','chakra-map','wealth-programming','celebrity-lookalike'];
+const routes=['experts','chat/:expertId','tools/:id','daily','celebrities/:id','reports/:id','store/:id','blog/:slug','dashboard','account','consultations','wallet','expert-portal','sign-in'];
+const failures=[];
+if(ids.length!==unique.size)failures.push('Duplicate tool IDs detected');
+if(ids.length<30)failures.push(`Expected at least 30 tools, found ${ids.length}`);
+for(const id of required)if(!unique.has(id))failures.push(`Missing required tool: ${id}`);
+for(const route of routes)if(!app.includes(`path=\"${route}\"`))failures.push(`Missing app route: ${route}`);
+if(!server.includes("'/api/tools/:id/run'"))failures.push('Missing generic tool run endpoint');
+if(!api.includes('runTool:'))failures.push('Missing frontend runTool client');
+if(app.includes('GenericToolPage'))failures.push('GenericToolPage placeholder still routed');
+if(failures.length){console.error('Audit failed:\n- '+failures.join('\n- '));process.exit(1)}
+console.log(`Audit passed: ${ids.length} unique tool modules + ${routes.length} core product routes.`);

@@ -1,13 +1,19 @@
 {
   "name": "vedanova",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "concurrently -n API,WEB -c auto \"npm run dev -w @vedanova/api\" \"npm run dev -w @vedanova/web\"",
-    "build": "npm run build -w @vedanova/api && npm run build -w @vedanova/web",
-    "typecheck": "npm run typecheck -w @vedanova/api && npm run typecheck -w @vedanova/web",
-    "lint": "npm run lint -w @vedanova/web"
+    "dev": "npm run build -w @vedanova/contracts && concurrently -n API,WEB -c auto \"npm run dev -w @vedanova/api\" \"npm run dev -w @vedanova/web\"",
+    "build": "npm run build -w @vedanova/contracts && npm run build -w @vedanova/api && npm run build -w @vedanova/web",
+    "typecheck": "npm run build -w @vedanova/contracts && npm run typecheck -w @vedanova/api && npm run typecheck -w @vedanova/web",
+    "lint": "npm run lint -w @vedanova/web",
+    "audit": "node scripts/audit.mjs"
   },
-  "devDependencies": { "concurrently": "^9.2.1" }
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
 }
